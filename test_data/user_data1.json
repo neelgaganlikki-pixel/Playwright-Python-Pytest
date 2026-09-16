@@ -4,28 +4,29 @@
         "password": "admin123"
     },
     "employee": {
-        "first_name": "Emily",
-        "middle_name": "Robert",
-        "last_name": "Brown",
-        "employee_id": "8017",
-        "gender": "Female",
-        "other_id": "M4CV1O",
-        "driver_license_number": "WSEF45EB",
-        "license_expiry_date": "2029-05-19",
-        "nationality": "North Korean",
-        "marital_status": "Other",
-        "date_of_birth": "1989-04-07"
+        "first_name": "James",
+        "middle_name": "Charles",
+        "last_name": "Davis",
+        "employee_id": "8280",
+        "gender": "Male",
+        "other_id": "K1MIOM",
+        "driver_license_number": "BQ710497",
+        "license_expiry_date": "2033-03-20",
+        "nationality": null,
+        "marital_status": "Married",
+        "date_of_birth": "1971-06-26",
+        "nationa lity": "British"
     },
     "employee_login": {
         "create_login_details": true,
-        "username": "JkAuto69569",
+        "username": "JkAuto93117",
         "status": "Enabled",
         "password": "JkAuto2026X9m4",
         "confirm_password": "JkAuto2026X9m4"
     },
     "custom_fields": {
-        "blood_type": "B+",
-        "test_field": "YHTNP4M"
+        "blood_type": "A+",
+        "test_field": "5SFVRF2"
     },
     "photo": {
         "path": "test_data/employee_photo.png"

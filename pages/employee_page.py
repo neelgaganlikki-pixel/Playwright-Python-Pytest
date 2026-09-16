@@ -175,7 +175,7 @@ class EmployeePage:
 
         nationality = self._select_random_option("Nationality")
         marital_status = self._select_random_option("Marital Status")
-        employee_data["nationality"] = nationality
+        employee_data["nationa lity"] = nationality
         employee_data["marital_status"] = marital_status
 
         gender_label = self.page.get_by_text(employee_data["gender"], exact=True).last

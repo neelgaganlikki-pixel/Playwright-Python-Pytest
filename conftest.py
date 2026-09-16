@@ -56,7 +56,7 @@ def configure_environment(request):
 def browser_type_launch_args():
     """Configure the Playwright browser launcher."""
     return {
-        "headless": True,
+        "headless": False,
         "slow_mo": int(os.getenv("SLOW_MO", "0")),
     }
 
