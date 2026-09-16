@@ -133,6 +133,24 @@ pipeline {
                 '''
             }
         }
+
+        // --- NEW AI PIPELINE STAGES ---
+
+        stage('Run AI Data Parser') {
+            steps {
+                bat '''
+                    .jenkins-venv\\Scripts\\python.exe ml/parse_results.py
+                '''
+            }
+        }
+
+        stage('Train AI Failure Prediction Model') {
+            steps {
+                bat '''
+                    .jenkins-venv\\Scripts\\python.exe ml/train_model.py
+                '''
+            }
+        }
     }
 
     post {

@@ -1,0 +1,7 @@
+test_name,module,execution_duration_sec,test_failed
+test_create_authenticated_session[chromium],tests,14.373,0
+test_invalid_login[chromium],tests,16.617,0
+test_valid_login_logout[chromium],tests,8.403,0
+test_create_buzz_post[chromium],tests,35.188,1
+test_create_vacancy[chromium],tests,27.166,0
+test_create_verify_delete_employee[chromium],tests,42.112,0
