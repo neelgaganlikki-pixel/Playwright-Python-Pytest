@@ -134,8 +134,6 @@ pipeline {
             }
         }
 
-        // --- NEW AI PIPELINE STAGES ---
-
         stage('Run AI Data Parser') {
             steps {
                 bat '''
@@ -148,6 +146,19 @@ pipeline {
             steps {
                 bat '''
                     .jenkins-venv\\Scripts\\python.exe ml/train_model.py
+                '''
+            }
+        }
+
+        stage('Generate AI Prediction Report') {
+            steps {
+                bat '''
+                    echo.
+                    echo ==========================================
+                    echo    AI TEST FAILURE RISK PREDICTION REPORT
+                    echo ==========================================
+                    .jenkins-venv\\Scripts\\python.exe ml/predict.py
+                    echo ==========================================
                 '''
             }
         }
