@@ -1,9 +1,21 @@
 pipeline {
+
     agent any
 
     environment {
+
+        // ============================================================
+        // PYTHON
+        // ============================================================
+
         PYTHON = 'C:\\Users\\NEELGAGAN B R\\AppData\\Local\\Programs\\Python\\Python314\\python.exe'
+
         PYTHONUNBUFFERED = '1'
+
+
+        // ============================================================
+        // TEST ENVIRONMENT
+        // ============================================================
 
         TEST_ENV = 'dev'
 
@@ -23,63 +35,135 @@ pipeline {
         PROD_USERNAME = 'Admin'
         PROD_PASSWORD = 'admin123'
 
+
+        // ============================================================
+        // PLAYWRIGHT
+        // ============================================================
+
         BROWSER = 'chromium'
+
         HEADLESS = 'true'
+
         SLOW_MO = '0'
 
+
+        // ============================================================
+        // FAILURE ARTIFACTS
+        // ============================================================
+
         SCREENSHOT_ON_FAILURE = 'true'
+
         VIDEO_ON_FAILURE = 'true'
+
         TRACE_ON_FAILURE = 'true'
     }
 
+
     stages {
 
+
+        // ============================================================
+        // CHECKOUT
+        // ============================================================
+
         stage('Checkout') {
+
             steps {
-                echo 'Checking out Playwright-Pytest project...'
+
+                echo '=========================================='
+
+                echo 'CHECKING OUT PROJECT'
+
+                echo '=========================================='
+
+                echo 'Jenkins SCM checkout is being used.'
             }
         }
 
+
+        // ============================================================
+        // CHECK PYTHON
+        // ============================================================
+
         stage('Check Python') {
+
             steps {
+
+                echo '=========================================='
+
+                echo 'CHECKING PYTHON'
+
+                echo '=========================================='
+
                 bat '''
                     "%PYTHON%" --version
+
+                    "%PYTHON%" -m pip --version
                 '''
             }
         }
 
+
+        // ============================================================
+        // CREATE ENVIRONMENT FILE
+        // ============================================================
+
         stage('Create Environment File') {
+
             steps {
+
+                echo 'Creating Jenkins environment configuration...'
+
                 bat '''
                     (
                         echo TEST_ENV=%TEST_ENV%
+
                         echo DEV_BASE_URL=%DEV_BASE_URL%
                         echo DEV_USERNAME=%DEV_USERNAME%
                         echo DEV_PASSWORD=%DEV_PASSWORD%
+
                         echo QA_BASE_URL=%QA_BASE_URL%
                         echo QA_USERNAME=%QA_USERNAME%
                         echo QA_PASSWORD=%QA_PASSWORD%
+
                         echo UAT_BASE_URL=%UAT_BASE_URL%
                         echo UAT_USERNAME=%UAT_USERNAME%
                         echo UAT_PASSWORD=%UAT_PASSWORD%
+
                         echo PROD_BASE_URL=%PROD_BASE_URL%
                         echo PROD_USERNAME=%PROD_USERNAME%
                         echo PROD_PASSWORD=%PROD_PASSWORD%
+
                         echo BROWSER=%BROWSER%
                         echo HEADLESS=%HEADLESS%
                         echo SLOW_MO=%SLOW_MO%
+
                         echo SCREENSHOT_ON_FAILURE=%SCREENSHOT_ON_FAILURE%
                         echo VIDEO_ON_FAILURE=%VIDEO_ON_FAILURE%
                         echo TRACE_ON_FAILURE=%TRACE_ON_FAILURE%
+
                     ) > .env
 
-                    echo Environment configuration created for Jenkins.
+                    echo Environment configuration created.
                 '''
             }
         }
 
+
+        // ============================================================
+        // CREATE PYTHON VIRTUAL ENVIRONMENT
+        // ============================================================
+
         stage('Setup Python Environment') {
+
             steps {
+
+                echo '=========================================='
+
+                echo 'CREATING PYTHON VIRTUAL ENVIRONMENT'
+
+                echo '=========================================='
+
                 bat '''
                     if exist .jenkins-venv rmdir /s /q .jenkins-venv
 
@@ -90,95 +174,461 @@ pipeline {
             }
         }
 
+
+        // ============================================================
+        // INSTALL DEPENDENCIES
+        // ============================================================
+
         stage('Install Dependencies') {
+
             steps {
+
+                echo '=========================================='
+
+                echo 'INSTALLING PYTHON DEPENDENCIES'
+
+                echo '=========================================='
+
                 bat '''
                     .jenkins-venv\\Scripts\\python.exe -m pip install -r requirements.txt
                 '''
             }
         }
 
+
+        // ============================================================
+        // INSTALL PLAYWRIGHT
+        // ============================================================
+
         stage('Install Playwright Browsers') {
+
             steps {
+
+                echo '=========================================='
+
+                echo 'INSTALLING PLAYWRIGHT CHROMIUM'
+
+                echo '=========================================='
+
                 bat '''
                     .jenkins-venv\\Scripts\\python.exe -m playwright install chromium
                 '''
             }
         }
 
+
+        // ============================================================
+        // RUN TESTS
+        // ============================================================
+
         stage('Run Tests') {
+
             steps {
+
                 catchError(
                     buildResult: 'FAILURE',
                     stageResult: 'FAILURE'
                 ) {
+
                     bat '''
+
+                        echo.
+                        echo ==========================================
+                        echo       STARTING PLAYWRIGHT TESTS
+                        echo ==========================================
+
                         if not exist test-results mkdir test-results
 
-                        .jenkins-venv\\Scripts\\python.exe -m pytest tests -v -s --junitxml=test-results\\pytest-results.xml
+                        if not exist screenshots mkdir screenshots
+
+
+                        .jenkins-venv\\Scripts\\python.exe -m pytest tests -v -s --tb=long --junitxml=test-results\\pytest-results.xml
+
+
+                        echo.
+                        echo ==========================================
+                        echo       PYTEST EXECUTION COMPLETED
+                        echo ==========================================
+
                     '''
                 }
             }
         }
 
-        stage('Test Summary') {
-            steps {
-                bat '''
-                    echo.
-                    echo ==========================================
-                    echo       PLAYWRIGHT TEST SUMMARY
-                    echo ==========================================
 
-                    powershell -NoProfile -Command "$xml = [xml](Get-Content 'test-results\\pytest-results.xml'); $testCases = @($xml.testsuites.testsuite.testcase); $modules = @{}; foreach ($test in $testCases) { $className = [string]$test.classname; if ($className -match 'tests[\\\\/.]([^\\\\/.]+)') { $moduleName = $Matches[1]; if (-not $modules.ContainsKey($moduleName)) { $modules[$moduleName] = @() }; $modules[$moduleName] += $test } }; $moduleNames = @($modules.Keys | Sort-Object); $passedModules = 0; $failedModules = 0; $skippedModules = 0; foreach ($moduleName in $moduleNames) { $moduleTests = @($modules[$moduleName]); $failed = @($moduleTests | Where-Object { $_.failure -or $_.error }).Count; $skipped = @($moduleTests | Where-Object { $_.skipped }).Count; if ($failed -gt 0) { $status = 'FAILED'; $failedModules++ } elseif ($skipped -eq $moduleTests.Count) { $status = 'SKIPPED'; $skippedModules++ } else { $status = 'PASSED'; $passedModules++ }; $displayName = (Get-Culture).TextInfo.ToTitleCase($moduleName.Replace('_',' ')); Write-Host ($displayName.PadRight(12) + ' -> ' + $status) }; Write-Host ''; Write-Host '=========================================='; Write-Host '       PLAYWRIGHT TEST SUMMARY'; Write-Host '=========================================='; $totalModules = $moduleNames.Count; Write-Host ('Total Tests : ' + $totalModules); Write-Host ('Passed      : ' + $passedModules); Write-Host ('Failed      : ' + $failedModules); Write-Host ('Skipped     : ' + $skippedModules); Write-Host '=========================================='"
+        // ============================================================
+        // TEST SUMMARY
+        // ============================================================
+
+        stage('Test Summary') {
+
+            steps {
+
+                echo '=========================================='
+
+                echo 'GENERATING TEST FAILURE SUMMARY'
+
+                echo '=========================================='
+
+
+                bat '''
+
+                    powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+
+                    "$xmlPath = 'test-results\\pytest-results.xml'; ^
+
+                    if (!(Test-Path $xmlPath)) { ^
+
+                        Write-Host ''; ^
+
+                        Write-Host 'JUnit XML report was not generated.' -ForegroundColor Red; ^
+
+                        exit 0 ^
+
+                    }; ^
+
+
+                    [xml]$xml = Get-Content $xmlPath; ^
+
+
+                    $testCases = @($xml.testsuites.testsuite.testcase); ^
+
+
+                    $total = $testCases.Count; ^
+
+                    $passed = 0; ^
+
+                    $failed = 0; ^
+
+                    $skipped = 0; ^
+
+
+                    foreach ($test in $testCases) { ^
+
+                        if ($test.failure -or $test.error) { ^
+
+                            $failed++ ^
+
+                        } ^
+
+                        elseif ($test.skipped) { ^
+
+                            $skipped++ ^
+
+                        } ^
+
+                        else { ^
+
+                            $passed++ ^
+
+                        } ^
+
+                    }; ^
+
+
+                    Write-Host ''; ^
+
+                    Write-Host '============================================================'; ^
+
+                    Write-Host '              PLAYWRIGHT TEST EXECUTION SUMMARY'; ^
+
+                    Write-Host '============================================================'; ^
+
+                    Write-Host ''; ^
+
+                    Write-Host ('TOTAL TESTS : ' + $total); ^
+
+                    Write-Host ('PASSED      : ' + $passed); ^
+
+                    Write-Host ('FAILED      : ' + $failed); ^
+
+                    Write-Host ('SKIPPED     : ' + $skipped); ^
+
+                    Write-Host ''; ^
+
+
+                    if ($failed -gt 0) { ^
+
+                        Write-Host '============================================================' -ForegroundColor Red; ^
+
+                        Write-Host '                    FAILED TESTS' -ForegroundColor Red; ^
+
+                        Write-Host '============================================================' -ForegroundColor Red; ^
+
+                        Write-Host ''; ^
+
+
+                        $counter = 1; ^
+
+
+                        foreach ($test in $testCases) { ^
+
+                            if ($test.failure -or $test.error) { ^
+
+                                Write-Host '------------------------------------------------------------'; ^
+
+                                Write-Host ($counter.ToString() + '. TEST: ' + [string]$test.name) -ForegroundColor Red; ^
+
+                                Write-Host ('   CLASS : ' + [string]$test.classname); ^
+
+
+                                $failureMessage = ''; ^
+
+
+                                if ($test.failure) { ^
+
+                                    $failureMessage = [string]$test.failure.message ^
+
+                                } ^
+
+                                elseif ($test.error) { ^
+
+                                    $failureMessage = [string]$test.error.message ^
+
+                                }; ^
+
+
+                                if ([string]::IsNullOrWhiteSpace($failureMessage)) { ^
+
+                                    $failureMessage = 'Failure message not available' ^
+
+                                }; ^
+
+
+                                Write-Host ('   ERROR : ' + $failureMessage) -ForegroundColor Yellow; ^
+
+
+                                $details = ''; ^
+
+
+                                if ($test.failure) { ^
+
+                                    $details = [string]$test.failure.'#text' ^
+
+                                } ^
+
+                                elseif ($test.error) { ^
+
+                                    $details = [string]$test.error.'#text' ^
+
+                                }; ^
+
+
+                                $fileFound = $false; ^
+
+
+                                if ($details -match 'File \"([^\"]+)\", line ([0-9]+)') { ^
+
+                                    Write-Host ('   FILE  : ' + $Matches[1]) -ForegroundColor Cyan; ^
+
+                                    Write-Host ('   LINE  : ' + $Matches[2]) -ForegroundColor Cyan; ^
+
+                                    $fileFound = $true ^
+
+                                }; ^
+
+
+                                if (!$fileFound) { ^
+
+                                    if ($details -match '([A-Za-z0-9_./\\\\-]+\\.py):([0-9]+)') { ^
+
+                                        Write-Host ('   FILE  : ' + $Matches[1]) -ForegroundColor Cyan; ^
+
+                                        Write-Host ('   LINE  : ' + $Matches[2]) -ForegroundColor Cyan; ^
+
+                                        $fileFound = $true ^
+
+                                    } ^
+
+                                }; ^
+
+
+                                if (!$fileFound) { ^
+
+                                    Write-Host '   FILE  : See traceback below' -ForegroundColor DarkYellow; ^
+
+                                    Write-Host '   LINE  : See traceback below' -ForegroundColor DarkYellow ^
+
+                                }; ^
+
+
+                                Write-Host ''; ^
+
+
+                                if (![string]::IsNullOrWhiteSpace($details)) { ^
+
+                                    Write-Host '   TRACEBACK:'; ^
+
+                                    Write-Host $details ^
+
+                                }; ^
+
+
+                                Write-Host ''; ^
+
+
+                                $counter++ ^
+
+                            } ^
+
+                        } ^
+
+
+                        Write-Host '============================================================' -ForegroundColor Red; ^
+
+                    } ^
+
+                    else { ^
+
+                        Write-Host '============================================================' -ForegroundColor Green; ^
+
+                        Write-Host '               NO FAILED TESTS' -ForegroundColor Green; ^
+
+                        Write-Host '============================================================' -ForegroundColor Green ^
+
+                    }; ^
+
+
+                    Write-Host ''; ^
+
+                    Write-Host 'Test summary generation completed.'"
+
                 '''
             }
         }
+
+
+        // ============================================================
+        // AI DATA PARSER
+        // ============================================================
 
         stage('Run AI Data Parser') {
+
             steps {
+
+                echo '=========================================='
+
+                echo 'RUNNING AI DATA PARSER'
+
+                echo '=========================================='
+
                 bat '''
+
                     .jenkins-venv\\Scripts\\python.exe ml/parse_results.py
+
                 '''
             }
         }
+
+
+        // ============================================================
+        // TRAIN AI MODEL
+        // ============================================================
 
         stage('Train AI Failure Prediction Model') {
+
             steps {
+
+                echo '=========================================='
+
+                echo 'TRAINING AI FAILURE PREDICTION MODEL'
+
+                echo '=========================================='
+
                 bat '''
+
                     .jenkins-venv\\Scripts\\python.exe ml/train_model.py
+
                 '''
             }
         }
 
+
+        // ============================================================
+        // AI PREDICTION REPORT
+        // ============================================================
+
         stage('Generate AI Prediction Report') {
+
             steps {
+
+                echo '=========================================='
+
+                echo 'AI TEST FAILURE RISK PREDICTION'
+
+                echo '=========================================='
+
                 bat '''
-                    echo.
-                    echo ==========================================
-                    echo    AI TEST FAILURE RISK PREDICTION REPORT
-                    echo ==========================================
+
                     .jenkins-venv\\Scripts\\python.exe ml/predict.py
-                    echo ==========================================
+
                 '''
             }
         }
     }
 
+
+    // ================================================================
+    // POST BUILD
+    // ================================================================
+
     post {
+
         always {
-            echo 'Jenkins test execution completed.'
+
+            echo '=========================================='
+
+            echo 'JENKINS EXECUTION COMPLETED'
+
+            echo '=========================================='
+
 
             bat '''
+
                 if exist .env del /q .env
+
             '''
         }
 
+
         success {
-            echo 'All Playwright-Pytest test areas passed successfully.'
+
+            echo '''
+
+==========================================
+       BUILD SUCCESSFUL
+==========================================
+
+All Playwright tests passed successfully.
+
+==========================================
+
+'''
         }
 
+
         failure {
-            echo 'Playwright-Pytest execution failed. Check the console output.'
+
+            echo '''
+
+==========================================
+          BUILD FAILED
+==========================================
+
+One or more Playwright tests failed.
+
+Check:
+
+1. Test Summary
+2. Failed Test Name
+3. File
+4. Line Number
+5. Error Message
+6. Traceback
+
+==========================================
+
+'''
         }
     }
 }
