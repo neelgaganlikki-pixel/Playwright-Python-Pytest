@@ -41,9 +41,7 @@ pipeline {
         // ============================================================
 
         BROWSER = 'chromium'
-
         HEADLESS = 'true'
-
         SLOW_MO = '0'
 
 
@@ -52,9 +50,7 @@ pipeline {
         // ============================================================
 
         SCREENSHOT_ON_FAILURE = 'true'
-
         VIDEO_ON_FAILURE = 'true'
-
         TRACE_ON_FAILURE = 'true'
     }
 
@@ -71,9 +67,7 @@ pipeline {
             steps {
 
                 echo '=========================================='
-
                 echo 'CHECKING OUT PROJECT'
-
                 echo '=========================================='
 
                 echo 'Jenkins SCM checkout is being used.'
@@ -90,9 +84,7 @@ pipeline {
             steps {
 
                 echo '=========================================='
-
                 echo 'CHECKING PYTHON'
-
                 echo '=========================================='
 
                 bat '''
@@ -159,9 +151,7 @@ pipeline {
             steps {
 
                 echo '=========================================='
-
                 echo 'CREATING PYTHON VIRTUAL ENVIRONMENT'
-
                 echo '=========================================='
 
                 bat '''
@@ -184,9 +174,7 @@ pipeline {
             steps {
 
                 echo '=========================================='
-
                 echo 'INSTALLING PYTHON DEPENDENCIES'
-
                 echo '=========================================='
 
                 bat '''
@@ -197,7 +185,7 @@ pipeline {
 
 
         // ============================================================
-        // INSTALL PLAYWRIGHT
+        // INSTALL PLAYWRIGHT BROWSER
         // ============================================================
 
         stage('Install Playwright Browsers') {
@@ -205,9 +193,7 @@ pipeline {
             steps {
 
                 echo '=========================================='
-
                 echo 'INSTALLING PLAYWRIGHT CHROMIUM'
-
                 echo '=========================================='
 
                 bat '''
@@ -265,233 +251,33 @@ pipeline {
             steps {
 
                 echo '=========================================='
-
-                echo 'GENERATING TEST FAILURE SUMMARY'
-
+                echo 'GENERATING TEST SUMMARY'
                 echo '=========================================='
 
 
                 bat '''
 
-                    powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+                    if not exist test-results\\pytest-results.xml (
 
-                    "$xmlPath = 'test-results\\pytest-results.xml'; ^
+                        echo.
+                        echo ==========================================
+                        echo ERROR: JUnit XML REPORT NOT FOUND
+                        echo ==========================================
 
-                    if (!(Test-Path $xmlPath)) { ^
+                        exit /b 0
+                    )
 
-                        Write-Host ''; ^
 
-                        Write-Host 'JUnit XML report was not generated.' -ForegroundColor Red; ^
+                    echo.
+                    echo ==========================================
+                    echo       PLAYWRIGHT TEST SUMMARY
+                    echo ==========================================
 
-                        exit 0 ^
 
-                    }; ^
+                    .jenkins-venv\\Scripts\\python.exe -c "import xml.etree.ElementTree as ET; root=ET.parse('test-results\\\\pytest-results.xml').getroot(); tests=root.findall('.//testcase'); failed=[t for t in tests if t.find('failure') is not None or t.find('error') is not None]; skipped=[t for t in tests if t.find('skipped') is not None]; passed=len(tests)-len(failed)-len(skipped); print(''); print('TOTAL TESTS :',len(tests)); print('PASSED      :',passed); print('FAILED      :',len(failed)); print('SKIPPED     :',len(skipped)); print(''); print('=========================================='); print('FAILED TESTS'); print('=========================================='); [(print(''), print('TEST :',t.get('name')), print('CLASS:',t.get('classname')), print('FILE :',t.get('file','Not available')), print('LINE :',t.get('line','Not available')), print('ERROR:',(t.find('failure').get('message') if t.find('failure') is not None else t.find('error').get('message') if t.find('error') is not None else 'Unknown')), print('TRACEBACK:'), print((t.find('failure').text if t.find('failure') is not None else t.find('error').text if t.find('error') is not None else 'Not available')), print('------------------------------------------')) for t in failed]; print(''); print('=========================================='); print('END OF TEST SUMMARY'); print('==========================================')"
 
 
-                    [xml]$xml = Get-Content $xmlPath; ^
-
-
-                    $testCases = @($xml.testsuites.testsuite.testcase); ^
-
-
-                    $total = $testCases.Count; ^
-
-                    $passed = 0; ^
-
-                    $failed = 0; ^
-
-                    $skipped = 0; ^
-
-
-                    foreach ($test in $testCases) { ^
-
-                        if ($test.failure -or $test.error) { ^
-
-                            $failed++ ^
-
-                        } ^
-
-                        elseif ($test.skipped) { ^
-
-                            $skipped++ ^
-
-                        } ^
-
-                        else { ^
-
-                            $passed++ ^
-
-                        } ^
-
-                    }; ^
-
-
-                    Write-Host ''; ^
-
-                    Write-Host '============================================================'; ^
-
-                    Write-Host '              PLAYWRIGHT TEST EXECUTION SUMMARY'; ^
-
-                    Write-Host '============================================================'; ^
-
-                    Write-Host ''; ^
-
-                    Write-Host ('TOTAL TESTS : ' + $total); ^
-
-                    Write-Host ('PASSED      : ' + $passed); ^
-
-                    Write-Host ('FAILED      : ' + $failed); ^
-
-                    Write-Host ('SKIPPED     : ' + $skipped); ^
-
-                    Write-Host ''; ^
-
-
-                    if ($failed -gt 0) { ^
-
-                        Write-Host '============================================================' -ForegroundColor Red; ^
-
-                        Write-Host '                    FAILED TESTS' -ForegroundColor Red; ^
-
-                        Write-Host '============================================================' -ForegroundColor Red; ^
-
-                        Write-Host ''; ^
-
-
-                        $counter = 1; ^
-
-
-                        foreach ($test in $testCases) { ^
-
-                            if ($test.failure -or $test.error) { ^
-
-                                Write-Host '------------------------------------------------------------'; ^
-
-                                Write-Host ($counter.ToString() + '. TEST: ' + [string]$test.name) -ForegroundColor Red; ^
-
-                                Write-Host ('   CLASS : ' + [string]$test.classname); ^
-
-
-                                $failureMessage = ''; ^
-
-
-                                if ($test.failure) { ^
-
-                                    $failureMessage = [string]$test.failure.message ^
-
-                                } ^
-
-                                elseif ($test.error) { ^
-
-                                    $failureMessage = [string]$test.error.message ^
-
-                                }; ^
-
-
-                                if ([string]::IsNullOrWhiteSpace($failureMessage)) { ^
-
-                                    $failureMessage = 'Failure message not available' ^
-
-                                }; ^
-
-
-                                Write-Host ('   ERROR : ' + $failureMessage) -ForegroundColor Yellow; ^
-
-
-                                $details = ''; ^
-
-
-                                if ($test.failure) { ^
-
-                                    $details = [string]$test.failure.'#text' ^
-
-                                } ^
-
-                                elseif ($test.error) { ^
-
-                                    $details = [string]$test.error.'#text' ^
-
-                                }; ^
-
-
-                                $fileFound = $false; ^
-
-
-                                if ($details -match 'File \"([^\"]+)\", line ([0-9]+)') { ^
-
-                                    Write-Host ('   FILE  : ' + $Matches[1]) -ForegroundColor Cyan; ^
-
-                                    Write-Host ('   LINE  : ' + $Matches[2]) -ForegroundColor Cyan; ^
-
-                                    $fileFound = $true ^
-
-                                }; ^
-
-
-                                if (!$fileFound) { ^
-
-                                    if ($details -match '([A-Za-z0-9_./\\\\-]+\\.py):([0-9]+)') { ^
-
-                                        Write-Host ('   FILE  : ' + $Matches[1]) -ForegroundColor Cyan; ^
-
-                                        Write-Host ('   LINE  : ' + $Matches[2]) -ForegroundColor Cyan; ^
-
-                                        $fileFound = $true ^
-
-                                    } ^
-
-                                }; ^
-
-
-                                if (!$fileFound) { ^
-
-                                    Write-Host '   FILE  : See traceback below' -ForegroundColor DarkYellow; ^
-
-                                    Write-Host '   LINE  : See traceback below' -ForegroundColor DarkYellow ^
-
-                                }; ^
-
-
-                                Write-Host ''; ^
-
-
-                                if (![string]::IsNullOrWhiteSpace($details)) { ^
-
-                                    Write-Host '   TRACEBACK:'; ^
-
-                                    Write-Host $details ^
-
-                                }; ^
-
-
-                                Write-Host ''; ^
-
-
-                                $counter++ ^
-
-                            } ^
-
-                        } ^
-
-
-                        Write-Host '============================================================' -ForegroundColor Red; ^
-
-                    } ^
-
-                    else { ^
-
-                        Write-Host '============================================================' -ForegroundColor Green; ^
-
-                        Write-Host '               NO FAILED TESTS' -ForegroundColor Green; ^
-
-                        Write-Host '============================================================' -ForegroundColor Green ^
-
-                    }; ^
-
-
-                    Write-Host ''; ^
-
-                    Write-Host 'Test summary generation completed.'"
+                    echo.
 
                 '''
             }
@@ -507,9 +293,7 @@ pipeline {
             steps {
 
                 echo '=========================================='
-
                 echo 'RUNNING AI DATA PARSER'
-
                 echo '=========================================='
 
                 bat '''
@@ -522,7 +306,7 @@ pipeline {
 
 
         // ============================================================
-        // TRAIN AI MODEL
+        // TRAIN AI FAILURE PREDICTION MODEL
         // ============================================================
 
         stage('Train AI Failure Prediction Model') {
@@ -530,9 +314,7 @@ pipeline {
             steps {
 
                 echo '=========================================='
-
                 echo 'TRAINING AI FAILURE PREDICTION MODEL'
-
                 echo '=========================================='
 
                 bat '''
@@ -545,7 +327,7 @@ pipeline {
 
 
         // ============================================================
-        // AI PREDICTION REPORT
+        // GENERATE AI PREDICTION REPORT
         // ============================================================
 
         stage('Generate AI Prediction Report') {
@@ -553,9 +335,7 @@ pipeline {
             steps {
 
                 echo '=========================================='
-
                 echo 'AI TEST FAILURE RISK PREDICTION'
-
                 echo '=========================================='
 
                 bat '''
@@ -577,9 +357,7 @@ pipeline {
         always {
 
             echo '=========================================='
-
             echo 'JENKINS EXECUTION COMPLETED'
-
             echo '=========================================='
 
 
@@ -615,14 +393,17 @@ All Playwright tests passed successfully.
           BUILD FAILED
 ==========================================
 
-One or more Playwright tests failed.
+One or more Playwright tests failed,
+or a pipeline stage failed.
 
-Check:
+Check the Jenkins Console Output.
 
-1. Test Summary
-2. Failed Test Name
-3. File
-4. Line Number
+The failure summary contains:
+
+1. Test Name
+2. Test Class
+3. Test File
+4. Test Line
 5. Error Message
 6. Traceback
 
