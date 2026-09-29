@@ -3,72 +3,89 @@ pipeline {
     agent any
 
     options {
-        ansiColor('xterm')
-
         timestamps()
-
-        // Do not allow multiple builds at the same time
         disableConcurrentBuilds()
     }
 
     environment {
 
-        // Python
+        // =====================================================
+        // PYTHON
+        // =====================================================
+
         PYTHON = 'C:\\Users\\NEELGAGAN B R\\AppData\\Local\\Programs\\Python\\Python314\\python.exe'
 
-        // Test environment
+
+        // =====================================================
+        // TEST ENVIRONMENT
+        // =====================================================
+
         TEST_ENV = 'dev'
 
-        // OrangeHRM
+
+        // =====================================================
+        // ORANGEHRM
+        // =====================================================
+
         DEV_BASE_URL = 'https://opensource-demo.orangehrmlive.com'
         DEV_USERNAME = 'Admin'
         DEV_PASSWORD = 'admin123'
 
-        // Browser
+
+        // =====================================================
+        // PLAYWRIGHT
+        // =====================================================
+
         BROWSER = 'chromium'
         HEADLESS = 'true'
         SLOW_MO = '0'
 
-        // Test results
+
+        // =====================================================
+        // RESULT DIRECTORIES
+        // =====================================================
+
         TEST_RESULTS_DIR = 'test-results'
         SCREENSHOTS_DIR = 'screenshots'
     }
 
+
     stages {
 
-        // =========================================================
+
+        // =====================================================
         // 1. CHECKOUT
-        // =========================================================
+        // =====================================================
 
         stage('Checkout') {
 
             steps {
 
-                echo 'Checking out source code...'
+                echo '========================================'
+                echo 'CHECKOUT'
+                echo '========================================'
 
                 checkout scm
             }
         }
 
 
-        // =========================================================
+        // =====================================================
         // 2. CHECK PYTHON
-        // =========================================================
+        // =====================================================
 
         stage('Check Python') {
 
             steps {
 
-                bat '''
-                    echo ========================================
-                    echo PYTHON VERSION
-                    echo ========================================
+                echo '========================================'
+                echo 'PYTHON INFORMATION'
+                echo '========================================'
 
+                bat '''
                     "%PYTHON%" --version
 
                     echo.
-                    echo PIP VERSION
-                    echo ========================================
 
                     "%PYTHON%" -m pip --version
                 '''
@@ -76,19 +93,19 @@ pipeline {
         }
 
 
-        // =========================================================
+        // =====================================================
         // 3. CREATE ENVIRONMENT FILE
-        // =========================================================
+        // =====================================================
 
         stage('Create Environment File') {
 
             steps {
 
-                bat '''
-                    echo ========================================
-                    echo CREATING ENVIRONMENT FILE
-                    echo ========================================
+                echo '========================================'
+                echo 'CREATING .ENV FILE'
+                echo '========================================'
 
+                bat '''
                     (
                         echo TEST_ENV=%TEST_ENV%
                         echo DEV_BASE_URL=%DEV_BASE_URL%
@@ -99,32 +116,37 @@ pipeline {
                         echo SLOW_MO=%SLOW_MO%
                     ) > .env
 
-                    echo Environment file created.
+                    echo .env created successfully.
                 '''
             }
         }
 
 
-        // =========================================================
-        // 4. CREATE VIRTUAL ENVIRONMENT
-        // =========================================================
+        // =====================================================
+        // 4. SETUP PYTHON ENVIRONMENT
+        // =====================================================
 
         stage('Setup Python Environment') {
 
             steps {
 
-                bat '''
-                    echo ========================================
-                    echo SETTING UP PYTHON VIRTUAL ENVIRONMENT
-                    echo ========================================
+                echo '========================================'
+                echo 'SETTING UP PYTHON ENVIRONMENT'
+                echo '========================================'
 
+                bat '''
                     if exist .jenkins-venv (
                         echo Existing virtual environment found.
                     ) else (
+                        echo Creating virtual environment...
                         "%PYTHON%" -m venv .jenkins-venv
                     )
 
+                    echo.
+
                     .jenkins-venv\\Scripts\\python.exe --version
+
+                    echo.
 
                     .jenkins-venv\\Scripts\\python.exe -m pip install --upgrade pip
                 '''
@@ -132,51 +154,55 @@ pipeline {
         }
 
 
-        // =========================================================
+        // =====================================================
         // 5. INSTALL DEPENDENCIES
-        // =========================================================
+        // =====================================================
 
         stage('Install Dependencies') {
 
             steps {
 
-                bat '''
-                    echo ========================================
-                    echo INSTALLING DEPENDENCIES
-                    echo ========================================
+                echo '========================================'
+                echo 'INSTALLING PYTHON DEPENDENCIES'
+                echo '========================================'
 
+                bat '''
                     .jenkins-venv\\Scripts\\python.exe -m pip install -r requirements.txt
                 '''
             }
         }
 
 
-        // =========================================================
+        // =====================================================
         // 6. INSTALL PLAYWRIGHT
-        // =========================================================
+        // =====================================================
 
         stage('Install Playwright Browsers') {
 
             steps {
 
-                bat '''
-                    echo ========================================
-                    echo INSTALLING PLAYWRIGHT BROWSERS
-                    echo ========================================
+                echo '========================================'
+                echo 'INSTALLING PLAYWRIGHT CHROMIUM'
+                echo '========================================'
 
+                bat '''
                     .jenkins-venv\\Scripts\\python.exe -m playwright install chromium
                 '''
             }
         }
 
 
-        // =========================================================
+        // =====================================================
         // 7. CREATE RESULT DIRECTORIES
-        // =========================================================
+        // =====================================================
 
         stage('Create Result Directories') {
 
             steps {
+
+                echo '========================================'
+                echo 'CREATING TEST RESULT DIRECTORIES'
+                echo '========================================'
 
                 bat '''
                     if not exist "%TEST_RESULTS_DIR%" mkdir "%TEST_RESULTS_DIR%"
@@ -187,9 +213,9 @@ pipeline {
         }
 
 
-        // =========================================================
+        // =====================================================
         // 8. RUN PYTEST
-        // =========================================================
+        // =====================================================
 
         stage('Run Tests') {
 
@@ -197,7 +223,11 @@ pipeline {
 
                 script {
 
-                    def testResult = bat(
+                    echo '========================================'
+                    echo 'RUNNING PLAYWRIGHT PYTEST TESTS'
+                    echo '========================================'
+
+                    def result = bat(
                         script: '''
                             .jenkins-venv\\Scripts\\python.exe -m pytest tests -v -s ^
                                 --tb=long ^
@@ -206,27 +236,39 @@ pipeline {
                         returnStatus: true
                     )
 
-                    // Store pytest result for later stages
-                    env.PYTEST_EXIT_CODE = testResult.toString()
+                    env.PYTEST_EXIT_CODE = result.toString()
 
-                    echo "Pytest exit code: ${env.PYTEST_EXIT_CODE}"
+                    echo ''
+                    echo "Pytest Exit Code: ${env.PYTEST_EXIT_CODE}"
+                    echo ''
 
-                    // Do NOT fail the pipeline here.
-                    // This allows Test Summary and artifacts to run.
+                    /*
+                     * Do not fail the pipeline here.
+                     *
+                     * This allows:
+                     *
+                     * Test Summary
+                     * Publish Results
+                     * Artifact Upload
+                     *
+                     * to execute even when tests fail.
+                     */
                 }
             }
         }
 
 
-        // =========================================================
+        // =====================================================
         // 9. TEST SUMMARY
-        // =========================================================
+        // =====================================================
 
         stage('Test Summary') {
 
             steps {
 
-                echo 'Generating detailed test summary...'
+                echo '========================================'
+                echo 'GENERATING TEST SUMMARY'
+                echo '========================================'
 
                 bat '''
                     .jenkins-venv\\Scripts\\python.exe jenkins_test_summary.py
@@ -235,13 +277,17 @@ pipeline {
         }
 
 
-        // =========================================================
+        // =====================================================
         // 10. PUBLISH JUNIT RESULTS
-        // =========================================================
+        // =====================================================
 
         stage('Publish Test Results') {
 
             steps {
+
+                echo '========================================'
+                echo 'PUBLISHING JUNIT TEST RESULTS'
+                echo '========================================'
 
                 junit(
                     testResults: 'test-results/pytest-results.xml',
@@ -252,9 +298,9 @@ pipeline {
         }
 
 
-        // =========================================================
+        // =====================================================
         // 11. AI DATA PARSER
-        // =========================================================
+        // =====================================================
 
         stage('AI Data Parser') {
 
@@ -262,11 +308,17 @@ pipeline {
 
                 expression {
 
-                    return fileExists('ml/parse_results.py')
+                    return fileExists(
+                        'ml/parse_results.py'
+                    )
                 }
             }
 
             steps {
+
+                echo '========================================'
+                echo 'AI DATA PARSER'
+                echo '========================================'
 
                 bat '''
                     .jenkins-venv\\Scripts\\python.exe ml\\parse_results.py
@@ -275,9 +327,9 @@ pipeline {
         }
 
 
-        // =========================================================
+        // =====================================================
         // 12. AI FAILURE PREDICTION
-        // =========================================================
+        // =====================================================
 
         stage('AI Failure Prediction') {
 
@@ -285,11 +337,17 @@ pipeline {
 
                 expression {
 
-                    return fileExists('ml/train_model.py')
+                    return fileExists(
+                        'ml/train_model.py'
+                    )
                 }
             }
 
             steps {
+
+                echo '========================================'
+                echo 'AI FAILURE PREDICTION'
+                echo '========================================'
 
                 bat '''
                     .jenkins-venv\\Scripts\\python.exe ml\\train_model.py
@@ -298,9 +356,9 @@ pipeline {
         }
 
 
-        // =========================================================
+        // =====================================================
         // 13. AI PREDICTION REPORT
-        // =========================================================
+        // =====================================================
 
         stage('AI Prediction Report') {
 
@@ -308,28 +366,70 @@ pipeline {
 
                 expression {
 
-                    return fileExists('ml/predict.py')
+                    return fileExists(
+                        'ml/predict.py'
+                    )
                 }
             }
 
             steps {
+
+                echo '========================================'
+                echo 'AI PREDICTION REPORT'
+                echo '========================================'
 
                 bat '''
                     .jenkins-venv\\Scripts\\python.exe ml\\predict.py
                 '''
             }
         }
+
+
+        // =====================================================
+        // 14. FINAL TEST STATUS
+        // =====================================================
+
+        stage('Final Test Status') {
+
+            steps {
+
+                script {
+
+                    echo ''
+                    echo '========================================'
+                    echo 'FINAL TEST STATUS'
+                    echo '========================================'
+
+                    echo "Pytest Exit Code: ${env.PYTEST_EXIT_CODE}"
+
+                    if (env.PYTEST_EXIT_CODE != '0') {
+
+                        echo ''
+                        echo 'TESTS FAILED'
+                        echo 'See the Test Summary stage above.'
+                        echo ''
+
+                    } else {
+
+                        echo ''
+                        echo 'ALL TESTS PASSED'
+                        echo ''
+                    }
+                }
+            }
+        }
     }
 
 
-    // =============================================================
+    // =========================================================
     // POST ACTIONS
-    // =============================================================
+    // =========================================================
 
     post {
 
         always {
 
+            echo ''
             echo '========================================'
             echo 'ARCHIVING TEST ARTIFACTS'
             echo '========================================'
@@ -345,46 +445,45 @@ pipeline {
                 allowEmptyArchive: true,
                 fingerprint: true
             )
-
-            archiveArtifacts(
-                artifacts: 'test-results/pytest-results.xml',
-                allowEmptyArchive: true,
-                fingerprint: true
-            )
         }
 
 
         success {
 
+            echo ''
             echo '========================================'
-            echo 'JENKINS PIPELINE SUCCESS'
+            echo 'PIPELINE COMPLETED'
             echo '========================================'
 
-            echo 'All Playwright tests passed.'
+            echo 'Jenkins pipeline completed successfully.'
         }
 
 
         failure {
 
+            echo ''
             echo '========================================'
-            echo 'JENKINS PIPELINE FAILED'
+            echo 'PIPELINE FAILED'
             echo '========================================'
 
-            echo "Pytest exit code: ${env.PYTEST_EXIT_CODE}"
+            echo "Pytest Exit Code: ${env.PYTEST_EXIT_CODE}"
 
-            echo 'Check the Test Summary stage for failed test details.'
+            echo ''
+            echo 'Check the Test Summary stage for details.'
         }
 
 
         cleanup {
 
-            echo 'Cleaning temporary files...'
-
-            // Keep .env and test results for debugging.
-            // Delete only temporary Python cache files.
+            echo ''
+            echo '========================================'
+            echo 'CLEANUP'
+            echo '========================================'
 
             bat '''
-                if exist __pycache__ rmdir /s /q __pycache__ 2>nul
+                if exist __pycache__ (
+                    rmdir /s /q __pycache__ 2>nul
+                )
             '''
         }
     }
