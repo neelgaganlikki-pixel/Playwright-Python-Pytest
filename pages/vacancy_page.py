@@ -1,4 +1,4 @@
-```python
+
 """Vacancy Page Object for OrangeHRM Vacancy module."""
 
 import re
@@ -425,4 +425,4 @@ class VacancyPage:
             expect(
                 invalid_positions
             ).to_be_visible(timeout=20
-```
+
