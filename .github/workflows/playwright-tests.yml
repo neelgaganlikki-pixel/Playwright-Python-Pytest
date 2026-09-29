@@ -1,0 +1,177 @@
+name: Playwright Pytest Automation
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Install Playwright
+        run: |
+          python -m playwright install --with-deps chromium
+
+      - name: Create test result directories
+        run: |
+          mkdir -p test-results
+          mkdir -p screenshots
+
+      - name: Run Pytest
+        id: pytest
+        continue-on-error: true
+        run: |
+          pytest tests -v -s \
+            --tb=long \
+            --junitxml=test-results/pytest-results.xml \
+            --html=test-results/report.html \
+            --self-contained-html
+
+      - name: Test Summary
+        if: always()
+        run: |
+          python - <<'PY'
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+
+          report = Path("test-results/pytest-results.xml")
+
+          if not report.exists():
+              print("JUnit report not found.")
+              exit(0)
+
+          root = ET.parse(report).getroot()
+
+          total = int(root.attrib.get("tests", 0))
+          failures = int(root.attrib.get("failures", 0))
+          errors = int(root.attrib.get("errors", 0))
+          skipped = int(root.attrib.get("skipped", 0))
+          passed = total - failures - errors - skipped
+
+          print("")
+          print("=" * 70)
+          print("PLAYWRIGHT PYTEST TEST SUMMARY")
+          print("=" * 70)
+          print(f"Total   : {total}")
+          print(f"Passed  : {passed}")
+          print(f"Failed  : {failures + errors}")
+          print(f"Skipped : {skipped}")
+          print("=" * 70)
+
+          for testcase in root.iter("testcase"):
+              failure = testcase.find("failure")
+              error = testcase.find("error")
+
+              if failure is not None or error is not None:
+                  problem = failure if failure is not None else error
+
+                  print("")
+                  print("FAILED TEST")
+                  print("-" * 70)
+                  print(f"Name      : {testcase.attrib.get('name', '')}")
+                  print(f"Class     : {testcase.attrib.get('classname', '')}")
+                  print(f"File      : {testcase.attrib.get('file', '')}")
+                  print(f"Line      : {testcase.attrib.get('line', '')}")
+                  print(f"Error     : {problem.attrib.get('message', '')}")
+                  print("")
+                  print("Traceback:")
+                  print(problem.text or "")
+                  print("-" * 70)
+          PY
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-test-results
+          path: |
+            test-results/
+            screenshots/
+          if-no-files-found: warn
+
+      - name: Publish GitHub Summary
+        if: always()
+        run: |
+          python - <<'PY'
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+
+          report = Path("test-results/pytest-results.xml")
+
+          if not report.exists():
+              with open(Path("${GITHUB_STEP_SUMMARY}"), "a") as f:
+                  f.write("## Playwright Pytest Results\n\nJUnit report was not generated.\n")
+              exit(0)
+
+          root = ET.parse(report).getroot()
+
+          total = int(root.attrib.get("tests", 0))
+          failures = int(root.attrib.get("failures", 0))
+          errors = int(root.attrib.get("errors", 0))
+          skipped = int(root.attrib.get("skipped", 0))
+          passed = total - failures - errors - skipped
+
+          summary = []
+
+          summary.append("## Playwright Pytest Results\n")
+          summary.append("| Metric | Count |")
+          summary.append("|---|---:|")
+          summary.append(f"| Total | {total} |")
+          summary.append(f"| Passed | {passed} |")
+          summary.append(f"| Failed | {failures + errors} |")
+          summary.append(f"| Skipped | {skipped} |")
+          summary.append("")
+
+          failed_tests = []
+
+          for testcase in root.iter("testcase"):
+              failure = testcase.find("failure")
+              error = testcase.find("error")
+
+              if failure is not None or error is not None:
+                  problem = failure if failure is not None else error
+
+                  failed_tests.append(
+                      f"### ❌ {testcase.attrib.get('name', '')}\n"
+                      f"- **Class:** `{testcase.attrib.get('classname', '')}`\n"
+                      f"- **File:** `{testcase.attrib.get('file', '')}`\n"
+                      f"- **Line:** `{testcase.attrib.get('line', '')}`\n"
+                      f"- **Error:** `{problem.attrib.get('message', '')}`\n\n"
+                      f"```text\n{problem.text or ''}\n```\n"
+                  )
+
+          if failed_tests:
+              summary.append("## Failed Tests\n")
+              summary.extend(failed_tests)
+          else:
+              summary.append("## Failed Tests\n\n✅ No failed tests.\n")
+
+          with open(Path("${GITHUB_STEP_SUMMARY}"), "a", encoding="utf-8") as f:
+              f.write("\n".join(summary))
+          PY
+
+      - name: Fail workflow if tests failed
+        if: steps.pytest.outcome == 'failure'
+        run: |
+          echo "Pytest tests failed."
+          exit 1
